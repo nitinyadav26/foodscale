@@ -338,7 +338,7 @@ class FoodCalorieTrackerTester:
         
         # Test sequence
         tests = [
-            ("Root Endpoint", self.test_root_endpoint),
+            ("API Connectivity", self.test_root_endpoint),
             ("Calorie Goal Calculation", self.test_calculate_calorie_goal),
             ("LogMeal API Integration", self.test_analyze_food_endpoint),
             ("Food Logging", self.test_log_food),
