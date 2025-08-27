@@ -1,0 +1,93 @@
+{
+  "summary": {
+    "passed": 4,
+    "total": 7,
+    "success_rate": 57.14285714285714
+  },
+  "results": [
+    {
+      "test": "Root Endpoint",
+      "success": false,
+      "message": "Connection error: Expecting value: line 1 column 1 (char 0)",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:14.589561"
+    },
+    {
+      "test": "Calorie Goal Calculation",
+      "success": true,
+      "message": "BMR: 1730, TDEE: 2682, Goal: 2223",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:14.645190"
+    },
+    {
+      "test": "LogMeal API Integration",
+      "success": false,
+      "message": "HTTP 500",
+      "details": "{\"detail\":\"Analysis failed: Incorrect padding\"}",
+      "timestamp": "2025-08-27T20:38:14.705760"
+    },
+    {
+      "test": "Food Logging",
+      "success": true,
+      "message": "Food logged with ID: 790c2180-1186-4608-8b53-01a50708be65",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:14.782901"
+    },
+    {
+      "test": "Food Logs Retrieval",
+      "success": true,
+      "message": "Retrieved 1 logs, Total calories: 231.0",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:14.842992"
+    },
+    {
+      "test": "Food Logs Date Filter",
+      "success": true,
+      "message": "Date filtering works",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:14.905163"
+    },
+    {
+      "test": "Food Log Deletion",
+      "success": true,
+      "message": "Food log deleted successfully",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:14.962413"
+    },
+    {
+      "test": "Food Log Deletion Verification",
+      "success": true,
+      "message": "Log successfully removed from database",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:15.013875"
+    },
+    {
+      "test": "Error Handling - Invalid Goal Data",
+      "success": true,
+      "message": "Correctly rejected invalid data",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:15.070076"
+    },
+    {
+      "test": "Error Handling - Invalid Image",
+      "success": true,
+      "message": "Correctly rejected invalid image",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:15.119552"
+    },
+    {
+      "test": "Error Handling - Non-existent Log",
+      "success": false,
+      "message": "Expected 404, got 500",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:15.203016"
+    },
+    {
+      "test": "Overall Error Handling",
+      "success": false,
+      "message": "2/3 error tests passed",
+      "details": null,
+      "timestamp": "2025-08-27T20:38:15.203060"
+    }
+  ]
+}
