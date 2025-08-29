@@ -427,6 +427,108 @@ async def analyze_food(request: FoodAnalysisRequest):
         print(f"Food analysis error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
+@app.post("/api/store-nutrition-display")
+async def store_nutrition_display(nutrition: NutritionDisplay):
+    """Store nutrition data for LCD display"""
+    try:
+        # Store the nutrition data with timestamp
+        nutrition_data = nutrition.dict()
+        nutrition_data["stored_at"] = datetime.utcnow()
+        
+        # Store in a separate collection for LCD display
+        await db.nutrition_display.insert_one(nutrition_data)
+        
+        # Keep only the latest 10 entries (cleanup old data)
+        cursor = db.nutrition_display.find().sort("stored_at", -1).skip(10)
+        old_records = await cursor.to_list(length=None)
+        
+        if old_records:
+            old_ids = [record["_id"] for record in old_records]
+            await db.nutrition_display.delete_many({"_id": {"$in": old_ids}})
+        
+        return {"message": "Nutrition data stored for LCD display", "status": "success"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to store nutrition data: {str(e)}")
+
+@app.get("/api/lcd-display", response_model=DisplayData)
+async def get_nutrition_for_lcd():
+    """API endpoint for LCD display to get latest nutrition information"""
+    try:
+        # Get the most recent nutrition analysis
+        latest_analysis = await db.nutrition_display.find_one(
+            {},
+            sort=[("stored_at", -1)]
+        )
+        
+        if not latest_analysis:
+            return DisplayData(
+                status="no_data",
+                nutrition=None,
+                message="No nutrition data available"
+            )
+        
+        # Convert to response format
+        nutrition_data = NutritionDisplay(
+            food_name=latest_analysis["food_name"],
+            weight_grams=latest_analysis["weight_grams"],
+            total_calories=latest_analysis["total_calories"],
+            protein=latest_analysis["protein"],
+            carbs=latest_analysis["carbs"],
+            fat=latest_analysis["fat"],
+            analyzed_at=latest_analysis["analyzed_at"],
+            confidence=latest_analysis["confidence"]
+        )
+        
+        return DisplayData(
+            status="success",
+            nutrition=nutrition_data,
+            message="Latest nutrition data retrieved"
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get LCD display data: {str(e)}")
+
+@app.get("/api/lcd-display/simple")
+async def get_simple_nutrition_for_lcd():
+    """Simplified API endpoint for basic LCD displays (plain text format)"""
+    try:
+        # Get the most recent nutrition analysis
+        latest_analysis = await db.nutrition_display.find_one(
+            {},
+            sort=[("stored_at", -1)]
+        )
+        
+        if not latest_analysis:
+            return {
+                "status": "no_data",
+                "display_text": "No data available"
+            }
+        
+        # Create simple display format
+        display_text = f"Food: {latest_analysis['food_name']}\n"
+        display_text += f"Weight: {latest_analysis['weight_grams']}g\n"
+        display_text += f"Calories: {latest_analysis['total_calories']} cal\n"
+        display_text += f"Protein: {latest_analysis['protein']}g\n"
+        display_text += f"Carbs: {latest_analysis['carbs']}g\n"
+        display_text += f"Fat: {latest_analysis['fat']}g"
+        
+        return {
+            "status": "success",
+            "food_name": latest_analysis["food_name"],
+            "weight_grams": latest_analysis["weight_grams"],
+            "calories": latest_analysis["total_calories"],
+            "protein": latest_analysis["protein"],
+            "carbs": latest_analysis["carbs"],
+            "fat": latest_analysis["fat"],
+            "confidence": latest_analysis["confidence"],
+            "display_text": display_text,
+            "analyzed_at": latest_analysis["analyzed_at"].isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get simple LCD data: {str(e)}")
+
 @app.post("/api/log-food")
 async def log_food(
     food_name: str = Form(...),
