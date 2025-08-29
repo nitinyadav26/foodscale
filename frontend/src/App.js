@@ -798,17 +798,36 @@ function App() {
         )}
 
         <div className="weight-input">
-          <label>Estimated Weight (grams):</label>
-          <input
-            type="number"
-            value={weightGrams}
-            onChange={(e) => setWeightGrams(Number(e.target.value))}
-            min="1"
-            max="2000"
-          />
-          {bluetoothConnected && (
-            <p className="bluetooth-help">
-              📡 Weight will be updated automatically from your connected scale
+          <label>Food Weight (grams):</label>
+          <div className="weight-control">
+            <input
+              type="number"
+              value={weightGrams}
+              onChange={(e) => setWeightGrams(Number(e.target.value))}
+              min="1"
+              max="2000"
+              disabled={bluetoothConnected && currentScaleWeight !== null}
+            />
+            {bluetoothConnected && (
+              <button 
+                className="btn-secondary btn-small"
+                onClick={readCurrentWeight}
+              >
+                📡 Read Scale
+              </button>
+            )}
+          </div>
+          {bluetoothConnected && currentScaleWeight !== null ? (
+            <p className="bluetooth-status connected">
+              📡 Scale Connected - Weight automatically detected: {Math.round(currentScaleWeight)}g
+            </p>
+          ) : bluetoothConnected ? (
+            <p className="bluetooth-status connecting">
+              📡 Scale Connected - Place food on scale to detect weight automatically
+            </p>
+          ) : (
+            <p className="bluetooth-status disconnected">
+              📡 Connect Bluetooth scale for automatic weight detection
             </p>
           )}
         </div>
