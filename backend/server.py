@@ -165,7 +165,16 @@ async def analyze_food(request: FoodAnalysisRequest):
     """Analyze food from image and return nutritional information"""
     try:
         # Decode base64 image
-        image_data = base64.b64decode(request.image_base64.split(',')[1] if ',' in request.image_base64 else request.image_base64)
+        try:
+            if request.image_base64.startswith('data:'):
+                # Handle data URL format
+                header, encoded = request.image_base64.split(',', 1)
+                image_data = base64.b64decode(encoded)
+            else:
+                # Handle raw base64
+                image_data = base64.b64decode(request.image_base64)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid base64 image data: {str(e)}")
         
         # Analyze with LogMeal API
         analysis_result = await analyze_food_with_logmeal(image_data)
