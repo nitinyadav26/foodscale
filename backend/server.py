@@ -580,11 +580,19 @@ async def get_user_stats(user_id: str):
     """Get comprehensive user statistics"""
     try:
         user = await db.users.find_one({"user_id": user_id})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
         
         # Get food logging statistics
         total_logs = await db.food_logs.count_documents({"user_id": user_id})
+        
+        # If user doesn't exist in users collection, return default stats
+        if not user:
+            return {
+                "user_id": user_id,
+                "streak_count": 0,
+                "total_foods_logged": total_logs,
+                "badges": [],
+                "daily_calorie_goal": 2000
+            }
         
         # Get current streak
         current_streak = user.get("streak_count", 0)
