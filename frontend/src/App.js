@@ -358,11 +358,43 @@ function App() {
 
       const result = await response.json();
       setFoodAnalysis(result);
+      
+      // Store nutrition data for LCD display
+      await storeNutritionForLCD(result);
+      
     } catch (error) {
       console.error('Analysis error:', error);
       alert('Failed to analyze food. Please try again.');
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const storeNutritionForLCD = async (analysisResult) => {
+    try {
+      const nutritionData = {
+        food_name: analysisResult.food_name,
+        weight_grams: analysisResult.weight_grams,
+        total_calories: analysisResult.total_calories,
+        protein: analysisResult.protein,
+        carbs: analysisResult.carbs,
+        fat: analysisResult.fat,
+        analyzed_at: new Date().toISOString(),
+        confidence: analysisResult.confidence
+      };
+
+      await fetch(`${BACKEND_URL}/api/store-nutrition-display`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(nutritionData)
+      });
+      
+      console.log('Nutrition data stored for LCD display');
+    } catch (error) {
+      console.error('Failed to store nutrition for LCD:', error);
+      // Don't show error to user as this is background functionality
     }
   };
 
