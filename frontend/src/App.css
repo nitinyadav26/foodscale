@@ -652,8 +652,14 @@ body {
   margin-bottom: 8px;
 }
 
+.weight-control {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .weight-input input {
-  width: 100%;
+  flex: 1;
   padding: 12px 16px;
   border: 1px solid var(--border-medium);
   border-radius: 8px;
@@ -667,12 +673,43 @@ body {
   border-color: var(--brand-primary);
 }
 
-.bluetooth-help {
+.weight-input input:disabled {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.btn-small {
+  min-height: 36px;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.bluetooth-status {
   font-family: 'Satoshi', sans-serif;
   font-size: 14px;
-  color: var(--brand-primary);
   margin-top: 8px;
   text-align: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.bluetooth-status.connected {
+  background: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.bluetooth-status.connecting {
+  background: rgba(255, 193, 7, 0.1);
+  color: #f57f17;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.bluetooth-status.disconnected {
+  background: rgba(158, 158, 158, 0.1);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-light);
 }
 
 .analysis-results {
