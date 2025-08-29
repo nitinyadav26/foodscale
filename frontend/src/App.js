@@ -27,6 +27,8 @@ function App() {
   const [bluetoothSupported, setBluetoothSupported] = useState(false);
   const [bluetoothConnected, setBluetoothConnected] = useState(false);
   const [bluetoothDevice, setBluetoothDevice] = useState(null);
+  const [currentScaleWeight, setCurrentScaleWeight] = useState(null);
+  const [bluetoothCharacteristic, setBluetoothCharacteristic] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({
     email: '', password: '', name: '', age: 25, height: 170, weight: 70, 
