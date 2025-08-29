@@ -312,6 +312,13 @@ function App() {
       setCapturedImage(imageDataUrl);
       stopCamera();
       setCurrentView('analysis');
+      
+      // If Bluetooth scale is connected, try to get fresh weight reading
+      if (bluetoothConnected && bluetoothCharacteristic) {
+        setTimeout(() => {
+          readCurrentWeight();
+        }, 500); // Small delay to allow UI to update
+      }
     }
   };
 
