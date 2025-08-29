@@ -151,14 +151,17 @@ function App() {
 
   const loadFoodLogs = async () => {
     try {
+      console.log('Loading food logs from:', `${BACKEND_URL}/api/food-logs/default_user`);
       const today = new Date().toISOString().split('T')[0];
       const response = await fetch(`${BACKEND_URL}/api/food-logs/default_user?date_filter=${today}`);
       
+      console.log('Response status:', response.status);
       if (!response.ok) {
         throw new Error('Failed to load logs');
       }
 
       const data = await response.json();
+      console.log('Loaded logs data:', data);
       setFoodLogs(data.logs);
       setDailyTotals(data.daily_totals);
     } catch (error) {
