@@ -453,7 +453,7 @@ async def store_nutrition_display(nutrition: NutritionDisplay):
 
 @app.get("/api/lcd-display", response_model=DisplayData)
 async def get_nutrition_for_lcd():
-    """API endpoint for LCD display to get latest nutrition information"""
+    """API endpoint for LCD display to get latest nutrition information - NO AUTH REQUIRED"""
     try:
         # Get the most recent nutrition analysis
         latest_analysis = await db.nutrition_display.find_one(
