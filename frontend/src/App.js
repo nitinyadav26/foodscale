@@ -433,13 +433,18 @@ function App() {
       const response = await fetch(`${BACKEND_URL}/api/user-stats/default_user`);
       
       if (!response.ok) {
-        throw new Error('Failed to load user stats');
+        console.warn('Failed to load user stats, using defaults');
+        // Use default stats if API fails
+        setUserStats({ streak_count: 0, total_foods_logged: 0, badges: [] });
+        return;
       }
 
       const data = await response.json();
       setUserStats(data);
     } catch (error) {
       console.error('Load user stats error:', error);
+      // Use default stats on error
+      setUserStats({ streak_count: 0, total_foods_logged: 0, badges: [] });
     }
   };
 
