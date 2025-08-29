@@ -104,13 +104,20 @@ class BluetoothWeightRequest(BaseModel):
     weight_grams: float
     user_id: str
 
-class CalorieGoalRequest(BaseModel):
-    age: int
-    height: float
-    weight: float
-    gender: str
-    activity_level: str
-    goal_weight: Optional[float] = None
+class NutritionDisplay(BaseModel):
+    food_name: str
+    weight_grams: float
+    total_calories: float
+    protein: float
+    carbs: float
+    fat: float
+    analyzed_at: datetime
+    confidence: float
+
+class DisplayData(BaseModel):
+    status: str
+    nutrition: Optional[NutritionDisplay] = None
+    message: str
 
 class Token(BaseModel):
     access_token: str
