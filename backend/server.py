@@ -173,9 +173,6 @@ async def analyze_food(request: FoodAnalysisRequest):
         if not analysis_result:
             raise HTTPException(status_code=400, detail="Failed to analyze food image")
             
-        recognition = analysis_result["recognition"]
-        nutrition = analysis_result["nutrition"]
-        
         # Extract food information based on working API structure
         segmentation = analysis_result["segmentation"] 
         nutrition = analysis_result["nutrition"]
