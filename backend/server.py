@@ -429,7 +429,7 @@ async def analyze_food(request: FoodAnalysisRequest):
 
 @app.post("/api/store-nutrition-display")
 async def store_nutrition_display(nutrition: NutritionDisplay):
-    """Store nutrition data for LCD display"""
+    """Store nutrition data for LCD display - NO AUTH REQUIRED"""
     try:
         # Store the nutrition data with timestamp
         nutrition_data = nutrition.dict()
