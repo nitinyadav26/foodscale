@@ -357,32 +357,6 @@ async def get_user_profile(current_user: dict = Depends(get_current_user)):
     return current_user
 
 # Existing Food Tracking Routes (Enhanced with User Authentication)
-@app.post("/api/calculate-calorie-goal")
-async def calculate_calorie_goal(request: CalorieGoalRequest):
-    """Calculate daily calorie goal based on user profile"""
-    try:
-        bmr = calculate_bmr(request.weight, request.height, request.age, request.gender)
-        activity_multiplier = get_activity_multiplier(request.activity_level)
-        tdee = bmr * activity_multiplier
-        
-        # Adjust for weight goal
-        if request.goal_weight:
-            weight_diff = request.goal_weight - request.weight
-            # Rough calculation: 1 pound = 3500 calories, aim for 1-2 lbs per week
-            calorie_adjustment = (weight_diff * 7700) / (12 * 7)  # 7700 cal per kg, 12 weeks timeline
-            daily_goal = tdee + calorie_adjustment
-        else:
-            daily_goal = tdee
-            
-        return {
-            "bmr": round(bmr),
-            "tdee": round(tdee), 
-            "daily_calorie_goal": round(daily_goal),
-            "recommendation": "maintain" if not request.goal_weight else ("gain" if weight_diff > 0 else "lose")
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Calculation error: {str(e)}")
-
 @app.post("/api/analyze-food")
 async def analyze_food(request: FoodAnalysisRequest):
     """Analyze food from image and return nutritional information"""
