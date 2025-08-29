@@ -164,62 +164,106 @@ function App() {
       device.addEventListener('gattserverdisconnected', () => {
         setBluetoothConnected(false);
         setBluetoothDevice(null);
+        setBluetoothCharacteristic(null);
+        setCurrentScaleWeight(null);
       });
 
       // Get Weight Scale service
       const service = await server.getPrimaryService(0x181D);
       const characteristic = await service.getCharacteristic(0x2A9D); // Weight Measurement
 
-      // Start notifications
+      // Store characteristic for later use
+      setBluetoothCharacteristic(characteristic);
+
+      // Start notifications for continuous weight monitoring
       await characteristic.startNotifications();
       characteristic.addEventListener('characteristicvaluechanged', handleWeightMeasurement);
       
-      alert('Bluetooth scale connected successfully!');
+      // Try to read initial weight
+      try {
+        await readCurrentWeight();
+      } catch (error) {
+        console.log('Could not read initial weight, will wait for notifications');
+      }
+      
+      alert('Bluetooth scale connected successfully! Weight will be updated automatically when analyzing food.');
     } catch (error) {
       console.error('Bluetooth connection failed:', error);
       alert('Failed to connect to Bluetooth scale: ' + error.message);
     }
   };
 
+  const readCurrentWeight = async () => {
+    if (!bluetoothCharacteristic) {
+      return;
+    }
+
+    try {
+      const value = await bluetoothCharacteristic.readValue();
+      const weightData = parseWeightMeasurement(value);
+      if (weightData) {
+        setCurrentScaleWeight(weightData.weightInGrams);
+      }
+    } catch (error) {
+      console.error('Failed to read current weight:', error);
+    }
+  };
+
+  const parseWeightMeasurement = (value) => {
+    try {
+      // Parse weight measurement according to GATT specification
+      const flags = value.getUint8(0);
+      const weightRaw = value.getUint16(1, true); // little-endian
+      
+      // Calculate weight based on flags
+      const imperialUnits = Boolean(flags & 0x01);
+      let weight;
+      
+      if (imperialUnits) {
+        weight = weightRaw * 0.01; // 0.01 lb resolution
+      } else {
+        weight = weightRaw * 0.005; // 0.005 kg resolution
+      }
+      
+      // Convert to grams
+      const weightInGrams = imperialUnits ? weight * 453.592 : weight * 1000;
+      
+      return {
+        weight: weight,
+        unit: imperialUnits ? 'lb' : 'kg',
+        weightInGrams: weightInGrams,
+        imperialUnits: imperialUnits
+      };
+    } catch (error) {
+      console.error('Error parsing weight measurement:', error);
+      return null;
+    }
+  };
+
   const handleWeightMeasurement = async (event) => {
     const value = event.target.value;
+    const weightData = parseWeightMeasurement(value);
     
-    // Parse weight measurement (simplified implementation)
-    const flags = value.getUint8(0);
-    const weightRaw = value.getUint16(1, true); // little-endian
-    
-    // Calculate weight based on flags
-    const imperialUnits = Boolean(flags & 0x01);
-    let weight;
-    
-    if (imperialUnits) {
-      weight = weightRaw * 0.01; // 0.01 lb resolution
-    } else {
-      weight = weightRaw * 0.005; // 0.005 kg resolution
-    }
-    
-    // Convert to grams
-    const weightInGrams = imperialUnits ? weight * 453.592 : weight * 1000;
-    
-    // Send to backend
-    try {
-      await fetch(`${BACKEND_URL}/api/bluetooth-weight`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          weight_grams: Math.round(weightInGrams),
-          user_id: 'default_user' // Replace with actual user ID
-        })
-      });
+    if (weightData) {
+      // Update current scale weight
+      setCurrentScaleWeight(weightData.weightInGrams);
       
-      // Update weight input for food analysis
-      setWeightGrams(Math.round(weightInGrams));
-      alert(`Weight updated: ${weight.toFixed(1)} ${imperialUnits ? 'lb' : 'kg'}`);
-    } catch (error) {
-      console.error('Failed to record weight:', error);
+      // Send to backend for logging (optional - you can remove this if not needed)
+      try {
+        await fetch(`${BACKEND_URL}/api/bluetooth-weight`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            weight_grams: Math.round(weightData.weightInGrams),
+            user_id: 'default_user' // Replace with actual user ID
+          })
+        });
+      } catch (error) {
+        console.error('Failed to record weight:', error);
+      }
     }
   };
 
