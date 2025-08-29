@@ -46,8 +46,9 @@ function App() {
     if (token) {
       setAuthToken(token);
       setIsAuthenticated(true);
-      loadFoodLogs();
-      loadUserStats();
+      // Load data with error handling
+      loadFoodLogs().catch(console.error);
+      loadUserStats().catch(console.error);
     }
     
     // Check Bluetooth support
