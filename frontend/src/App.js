@@ -134,11 +134,23 @@ function App() {
     setCurrentView('login');
     
     // Disconnect Bluetooth if connected
-    if (bluetoothConnected && bluetoothDevice) {
-      bluetoothDevice.gatt.disconnect();
-      setBluetoothConnected(false);
-      setBluetoothDevice(null);
+    if (bluetoothConnected && bluetoothCharacteristic) {
+      try {
+        bluetoothCharacteristic.removeEventListener('characteristicvaluechanged', handleWeightMeasurement);
+        bluetoothCharacteristic.stopNotifications();
+      } catch (error) {
+        console.error('Error stopping Bluetooth notifications:', error);
+      }
     }
+    
+    if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+      bluetoothDevice.gatt.disconnect();
+    }
+    
+    setBluetoothConnected(false);
+    setBluetoothDevice(null);
+    setBluetoothCharacteristic(null);
+    setCurrentScaleWeight(null);
   };
 
   // Bluetooth Functions
