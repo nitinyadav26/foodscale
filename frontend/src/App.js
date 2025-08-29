@@ -56,12 +56,12 @@ function App() {
     }
   }, []);
 
-  // Calculate calorie goal when profile changes
+  // Auto-update weight when scale reading changes and we're in analysis view
   useEffect(() => {
-    if (isAuthenticated) {
-      calculateCalorieGoal();
+    if (currentView === 'analysis' && currentScaleWeight !== null) {
+      setWeightGrams(Math.round(currentScaleWeight));
     }
-  }, [userProfile, isAuthenticated]);
+  }, [currentScaleWeight, currentView]);
 
   // Authentication Functions
   const handleLogin = async (e) => {
