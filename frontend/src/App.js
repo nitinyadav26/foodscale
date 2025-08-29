@@ -63,6 +63,13 @@ function App() {
     }
   }, [userProfile, isAuthenticated]);
 
+  // Auto-update weight when scale reading changes and we're in analysis view
+  useEffect(() => {
+    if (currentView === 'analysis' && currentScaleWeight !== null) {
+      setWeightGrams(Math.round(currentScaleWeight));
+    }
+  }, [currentScaleWeight, currentView]);
+
   // Authentication Functions
   const handleLogin = async (e) => {
     e.preventDefault();
