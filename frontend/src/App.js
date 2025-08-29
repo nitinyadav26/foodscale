@@ -188,6 +188,9 @@ function App() {
 
   const calculateCalorieGoal = async () => {
     try {
+      console.log('Calculating calorie goal with profile:', userProfile);
+      console.log('Backend URL:', BACKEND_URL);
+      
       const response = await fetch(`${BACKEND_URL}/api/calculate-calorie-goal`, {
         method: 'POST',
         headers: {
@@ -196,11 +199,13 @@ function App() {
         body: JSON.stringify(userProfile)
       });
 
+      console.log('Calorie goal response status:', response.status);
       if (!response.ok) {
         throw new Error('Failed to calculate calorie goal');
       }
 
       const result = await response.json();
+      console.log('Calorie goal result:', result);
       setCalorieGoal(result.daily_calorie_goal);
     } catch (error) {
       console.error('Calorie goal calculation error:', error);
