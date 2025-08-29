@@ -491,7 +491,7 @@ async def get_nutrition_for_lcd():
 
 @app.get("/api/lcd-display/simple")
 async def get_simple_nutrition_for_lcd():
-    """Simplified API endpoint for basic LCD displays (plain text format)"""
+    """Simplified API endpoint for basic LCD displays - NO AUTH REQUIRED"""
     try:
         # Get the most recent nutrition analysis
         latest_analysis = await db.nutrition_display.find_one(
