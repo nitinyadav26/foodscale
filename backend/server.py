@@ -204,7 +204,7 @@ async def analyze_food(request: FoodAnalysisRequest):
             "carbs": round(carbs_per_100g * scale_factor, 1),
             "fat": round(fat_per_100g * scale_factor, 1),
             "confidence": 0.8,  # Default confidence since we don't have recognition results
-            "raw_recognition": segmentation,  # Use segmentation data instead
+            "raw_segmentation": segmentation,  # Use segmentation data instead
             "raw_nutrition": nutrition
         }
         
