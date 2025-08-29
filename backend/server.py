@@ -1,17 +1,21 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 import os
 import requests
 import json
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import base64
 from PIL import Image
 import io
+import hashlib
+import jwt
+from passlib.context import CryptContext
 
 # Environment variables
 MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
@@ -21,8 +25,12 @@ CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
 # LogMeal API Configuration
 LOGMEAL_API_TOKEN = "8dbce41a1c3e0dac3eb6a3016486d1cfea45e341"
 LOGMEAL_HEADERS = {"Authorization": f"Bearer {LOGMEAL_API_TOKEN}"}
-MODEL_VERSION = "v1.1"
 TIMEOUT = 30
+
+# JWT Configuration
+SECRET_KEY = "your-secret-key-change-in-production"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 app = FastAPI(title="Food Calorie Tracker API")
 
@@ -39,9 +47,29 @@ app.add_middleware(
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
+# Authentication
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
+
 # Pydantic Models
+class UserRegistration(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+    age: int
+    height: float  # cm
+    weight: float  # kg
+    gender: str
+    activity_level: str
+    goal_weight: Optional[float] = None
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
 class UserProfile(BaseModel):
     user_id: str
+    email: str
     name: str
     age: int
     height: float  # cm
@@ -51,6 +79,9 @@ class UserProfile(BaseModel):
     goal_weight: Optional[float] = None
     daily_calorie_goal: Optional[float] = None
     created_at: datetime
+    streak_count: int = 0
+    total_foods_logged: int = 0
+    badges: List[str] = []
 
 class FoodLog(BaseModel):
     log_id: str
@@ -68,6 +99,10 @@ class FoodLog(BaseModel):
 class FoodAnalysisRequest(BaseModel):
     image_base64: str
     weight_grams: Optional[float] = 100
+    
+class BluetoothWeightRequest(BaseModel):
+    weight_grams: float
+    user_id: str
 
 class CalorieGoalRequest(BaseModel):
     age: int
@@ -77,7 +112,39 @@ class CalorieGoalRequest(BaseModel):
     activity_level: str
     goal_weight: Optional[float] = None
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
 # Helper Functions
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    
+    user = await db.users.find_one({"email": email})
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
 def calculate_bmr(weight, height, age, gender):
     """Calculate Basal Metabolic Rate using Mifflin-St Jeor Equation"""
     if gender.lower() == 'male':
@@ -129,11 +196,167 @@ async def analyze_food_with_logmeal(image_bytes):
         print(f"LogMeal API Error: {str(e)}")
         return None
 
+async def update_user_streak(user_id: str):
+    """Update user's logging streak"""
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        return
+        
+    today = datetime.utcnow().date()
+    yesterday = today - timedelta(days=1)
+    
+    # Check if user logged food today
+    today_logs = await db.food_logs.find_one({
+        "user_id": user_id,
+        "logged_at": {
+            "$gte": datetime.combine(today, datetime.min.time()),
+            "$lt": datetime.combine(today + timedelta(days=1), datetime.min.time())
+        }
+    })
+    
+    if not today_logs:
+        return  # No logs today, don't update streak
+    
+    # Check if user logged yesterday
+    yesterday_logs = await db.food_logs.find_one({
+        "user_id": user_id,
+        "logged_at": {
+            "$gte": datetime.combine(yesterday, datetime.min.time()),
+            "$lt": datetime.combine(today, datetime.min.time())
+        }
+    })
+    
+    if yesterday_logs:
+        # Continue streak
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"streak_count": 1}}
+        )
+    else:
+        # Reset streak
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"streak_count": 1}}
+        )
+
+async def check_and_award_badges(user_id: str):
+    """Check and award badges based on user activity"""
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        return
+    
+    new_badges = []
+    current_badges = user.get("badges", [])
+    
+    # Badge: First Food Log
+    if user.get("total_foods_logged", 0) >= 1 and "first_log" not in current_badges:
+        new_badges.append("first_log")
+    
+    # Badge: 7-Day Streak
+    if user.get("streak_count", 0) >= 7 and "week_warrior" not in current_badges:
+        new_badges.append("week_warrior")
+    
+    # Badge: 30-Day Streak
+    if user.get("streak_count", 0) >= 30 and "month_master" not in current_badges:
+        new_badges.append("month_master")
+    
+    # Badge: 100 Foods Logged
+    if user.get("total_foods_logged", 0) >= 100 and "century_tracker" not in current_badges:
+        new_badges.append("century_tracker")
+    
+    if new_badges:
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$addToSet": {"badges": {"$each": new_badges}}}
+        )
+        return new_badges
+    
+    return []
+
 # API Routes
 @app.get("/")
 async def root():
     return {"message": "Food Calorie Tracker API", "status": "running"}
 
+# Authentication Routes
+@app.post("/api/register", response_model=Token)
+async def register_user(user_data: UserRegistration):
+    """Register a new user"""
+    try:
+        # Check if user already exists
+        existing_user = await db.users.find_one({"email": user_data.email})
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Hash password
+        hashed_password = hash_password(user_data.password)
+        
+        # Calculate daily calorie goal
+        bmr = calculate_bmr(user_data.weight, user_data.height, user_data.age, user_data.gender)
+        activity_multiplier = get_activity_multiplier(user_data.activity_level)
+        tdee = bmr * activity_multiplier
+        
+        if user_data.goal_weight:
+            weight_diff = user_data.goal_weight - user_data.weight
+            calorie_adjustment = (weight_diff * 7700) / (12 * 7)  # 7700 cal per kg, 12 weeks timeline
+            daily_goal = tdee + calorie_adjustment
+        else:
+            daily_goal = tdee
+        
+        # Create user
+        user_id = str(uuid.uuid4())
+        user = {
+            "user_id": user_id,
+            "email": user_data.email,
+            "password": hashed_password,
+            "name": user_data.name,
+            "age": user_data.age,
+            "height": user_data.height,
+            "weight": user_data.weight,
+            "gender": user_data.gender,
+            "activity_level": user_data.activity_level,
+            "goal_weight": user_data.goal_weight,
+            "daily_calorie_goal": round(daily_goal),
+            "created_at": datetime.utcnow(),
+            "streak_count": 0,
+            "total_foods_logged": 0,
+            "badges": []
+        }
+        
+        await db.users.insert_one(user)
+        
+        # Create access token
+        access_token = create_access_token(data={"sub": user_data.email})
+        
+        return {"access_token": access_token, "token_type": "bearer"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
+@app.post("/api/login", response_model=Token)
+async def login_user(user_credentials: UserLogin):
+    """Login user"""
+    try:
+        user = await db.users.find_one({"email": user_credentials.email})
+        if not user or not verify_password(user_credentials.password, user["password"]):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        access_token = create_access_token(data={"sub": user_credentials.email})
+        return {"access_token": access_token, "token_type": "bearer"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+
+@app.get("/api/profile")
+async def get_user_profile(current_user: dict = Depends(get_current_user)):
+    """Get user profile"""
+    current_user.pop("password", None)  # Remove password from response
+    current_user["_id"] = str(current_user["_id"])
+    return current_user
+
+# Existing Food Tracking Routes (Enhanced with User Authentication)
 @app.post("/api/calculate-calorie-goal")
 async def calculate_calorie_goal(request: CalorieGoalRequest):
     """Calculate daily calorie goal based on user profile"""
@@ -234,7 +457,7 @@ async def log_food(
     image_base64: str = Form(...),
     user_id: str = Form(default="default_user")
 ):
-    """Log food entry to database"""
+    """Log food entry to database with gamification"""
     try:
         food_log = {
             "log_id": str(uuid.uuid4()),
@@ -251,7 +474,24 @@ async def log_food(
         }
         
         await db.food_logs.insert_one(food_log)
-        return {"message": "Food logged successfully", "log_id": food_log["log_id"]}
+        
+        # Update user statistics
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"total_foods_logged": 1}}
+        )
+        
+        # Update streak
+        await update_user_streak(user_id)
+        
+        # Check for new badges
+        new_badges = await check_and_award_badges(user_id)
+        
+        response = {"message": "Food logged successfully", "log_id": food_log["log_id"]}
+        if new_badges:
+            response["new_badges"] = new_badges
+            
+        return response
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to log food: {str(e)}")
@@ -310,6 +550,68 @@ async def delete_food_log(log_id: str):
         return {"message": "Food log deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete food log: {str(e)}")
+
+# Bluetooth Weight Scale Integration
+@app.post("/api/bluetooth-weight")
+async def receive_bluetooth_weight(request: BluetoothWeightRequest):
+    """Receive weight data from Bluetooth scale"""
+    try:
+        # Store weight measurement
+        weight_record = {
+            "measurement_id": str(uuid.uuid4()),
+            "user_id": request.user_id,
+            "weight_grams": request.weight_grams,
+            "measured_at": datetime.utcnow()
+        }
+        
+        await db.weight_measurements.insert_one(weight_record)
+        
+        return {
+            "message": "Weight recorded successfully",
+            "weight_grams": request.weight_grams,
+            "measurement_id": weight_record["measurement_id"]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to record weight: {str(e)}")
+
+@app.get("/api/user-stats/{user_id}")
+async def get_user_stats(user_id: str):
+    """Get comprehensive user statistics"""
+    try:
+        user = await db.users.find_one({"user_id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Get food logging statistics
+        total_logs = await db.food_logs.count_documents({"user_id": user_id})
+        
+        # Get current streak
+        current_streak = user.get("streak_count", 0)
+        
+        # Get badges
+        badges = user.get("badges", [])
+        
+        # Badge descriptions
+        badge_info = {
+            "first_log": {"name": "First Steps", "description": "Logged your first meal"},
+            "week_warrior": {"name": "Week Warrior", "description": "7-day logging streak"},
+            "month_master": {"name": "Month Master", "description": "30-day logging streak"},
+            "century_tracker": {"name": "Century Tracker", "description": "100 foods logged"}
+        }
+        
+        user_badges = [{"id": badge, **badge_info.get(badge, {"name": badge, "description": "Achievement unlocked"})} for badge in badges]
+        
+        return {
+            "user_id": user_id,
+            "streak_count": current_streak,
+            "total_foods_logged": total_logs,
+            "badges": user_badges,
+            "daily_calorie_goal": user.get("daily_calorie_goal", 2000)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get user stats: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
