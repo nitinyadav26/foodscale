@@ -19,8 +19,8 @@ DB_NAME = os.environ.get('DB_NAME', 'test_database')
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
 
 # LogMeal API Configuration
-LOGMEAL_API_KEY = "764820f62809afa38d143289086d47ae418aae29"
-LOGMEAL_HEADERS = {"Authorization": f"Bearer {LOGMEAL_API_KEY}"}
+LOGMEAL_API_TOKEN = "8dbce41a1c3e0dac3eb6a3016486d1cfea45e341"
+LOGMEAL_HEADERS = {"Authorization": f"Bearer {LOGMEAL_API_TOKEN}"}
 MODEL_VERSION = "v1.1"
 TIMEOUT = 30
 
