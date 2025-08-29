@@ -97,23 +97,23 @@ def get_activity_multiplier(activity_level):
     return multipliers.get(activity_level.lower(), 1.2)
 
 async def analyze_food_with_logmeal(image_bytes):
-    """Analyze food using LogMeal API"""
+    """Analyze food using LogMeal API - Updated to match working implementation"""
     try:
-        # Step 1: Food Recognition
-        url_recognition = f"https://api.logmeal.com/v2/image/recognition/complete/{MODEL_VERSION}"
+        # Step 1: Image Segmentation (Single/Several Dishes Detection)
+        url_segmentation = "https://api.logmeal.com/v2/image/segmentation/complete"
         files = {"image": ("food.jpg", image_bytes, "image/jpeg")}
         
-        response = requests.post(url_recognition, headers=LOGMEAL_HEADERS, files=files, timeout=TIMEOUT)
+        response = requests.post(url_segmentation, files=files, headers=LOGMEAL_HEADERS, timeout=TIMEOUT)
         response.raise_for_status()
-        recognition_data = response.json()
+        segmentation_data = response.json()
         
-        image_id = recognition_data.get("imageId") or recognition_data.get("image_id")
+        image_id = segmentation_data.get("imageId")
         
         if not image_id:
             return None
             
-        # Step 2: Nutrition Information
-        url_nutrition = f"https://api.logmeal.com/v2/nutrition/recipe/nutritionalInfo/{MODEL_VERSION}"
+        # Step 2: Nutritional Information  
+        url_nutrition = "https://api.logmeal.com/v2/recipe/nutritionalInfo"
         nutrition_body = {"imageId": image_id}
         
         nutrition_response = requests.post(url_nutrition, headers=LOGMEAL_HEADERS, json=nutrition_body, timeout=TIMEOUT)
@@ -121,7 +121,7 @@ async def analyze_food_with_logmeal(image_bytes):
         nutrition_data = nutrition_response.json()
         
         return {
-            "recognition": recognition_data,
+            "segmentation": segmentation_data,
             "nutrition": nutrition_data
         }
         
