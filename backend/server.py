@@ -14,13 +14,16 @@ import base64
 from PIL import Image
 import io
 import hashlib
-import jwt
+from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 # Environment variables
 MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 DB_NAME = os.environ.get('DB_NAME', 'test_database')
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
+# Default login credentials (for testing)
+DEFAULT_LOGIN_EMAIL = os.environ.get('DEFAULT_LOGIN_EMAIL', 'admin@example.com')
+DEFAULT_LOGIN_PASSWORD = os.environ.get('DEFAULT_LOGIN_PASSWORD', 'adminpass')
 
 # LogMeal API Configuration
 LOGMEAL_API_TOKEN = "8dbce41a1c3e0dac3eb6a3016486d1cfea45e341"
@@ -144,7 +147,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         email: str = payload.get("sub")
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    except jwt.PyJWTError:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
     
     user = await db.users.find_one({"email": email})
@@ -343,6 +346,10 @@ async def register_user(user_data: UserRegistration):
 @app.post("/api/login", response_model=Token)
 async def login_user(user_credentials: UserLogin):
     """Login user"""
+    # Default login override
+    if user_credentials.email == DEFAULT_LOGIN_EMAIL and user_credentials.password == DEFAULT_LOGIN_PASSWORD:
+        access_token = create_access_token(data={"sub": DEFAULT_LOGIN_EMAIL})
+        return {"access_token": access_token, "token_type": "bearer"}
     try:
         user = await db.users.find_one({"email": user_credentials.email})
         if not user or not verify_password(user_credentials.password, user["password"]):
