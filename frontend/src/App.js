@@ -39,12 +39,12 @@ function App() {
   // Camera Functions
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
           facingMode: 'environment',
           width: { ideal: 1920 },
           height: { ideal: 1080 }
-        } 
+        }
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -76,7 +76,7 @@ function App() {
       canvas.height = video.videoHeight;
 
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
+
       const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
       setCapturedImage(imageDataUrl);
       stopCamera();
@@ -153,7 +153,7 @@ function App() {
     try {
       const today = new Date().toISOString().split('T')[0];
       const response = await fetch(`${BACKEND_URL}/api/food-logs/default_user?date_filter=${today}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to load logs');
       }
@@ -212,7 +212,7 @@ function App() {
         <p className="hero-subtitle">
           Snap a photo of your food and instantly get detailed nutritional information
         </p>
-        
+
         <div className="daily-summary">
           <h3>Today's Progress</h3>
           <div className="progress-card">
@@ -238,13 +238,13 @@ function App() {
         </div>
 
         <div className="action-buttons">
-          <button 
+          <button
             className="btn-primary"
             onClick={() => setCurrentView('camera')}
           >
             📱 Take Food Photo
           </button>
-          <button 
+          <button
             className="btn-secondary"
             onClick={() => setCurrentView('logs')}
           >
@@ -258,7 +258,7 @@ function App() {
   const renderCamera = () => (
     <div className="camera-view">
       <div className="camera-header">
-        <button 
+        <button
           className="btn-back"
           onClick={() => {
             stopCamera();
@@ -271,17 +271,18 @@ function App() {
       </div>
 
       <div className="camera-container">
-        <video 
+        <video
           ref={videoRef}
-          autoPlay 
+          autoPlay
           playsInline
+          webkit-playsinline="true"
           style={{ display: cameraActive ? 'block' : 'none' }}
         />
-        <canvas 
-          ref={canvasRef} 
+        <canvas
+          ref={canvasRef}
           style={{ display: 'none' }}
         />
-        
+
         {!cameraActive && (
           <div className="camera-placeholder">
             <p>Camera not active</p>
@@ -294,7 +295,7 @@ function App() {
 
       {cameraActive && (
         <div className="camera-controls">
-          <button 
+          <button
             className="btn-capture"
             onClick={capturePhoto}
           >
@@ -302,13 +303,45 @@ function App() {
           </button>
         </div>
       )}
+
+      {/* Fallback for iOS/PWA where getUserMedia might fail or be less convenient */}
+      <div className="camera-fallback" style={{ marginTop: '20px', textAlign: 'center' }}>
+        <p style={{ marginBottom: '10px', color: '#666' }}>Or upload from camera/gallery:</p>
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          id="camera-file-input"
+          className="file-input"
+          onChange={(e) => {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                setCapturedImage(reader.result);
+                stopCamera();
+                setCurrentView('analysis');
+              };
+              reader.readAsDataURL(file);
+            }
+          }}
+          style={{ display: 'none' }}
+        />
+        <label
+          htmlFor="camera-file-input"
+          className="btn-secondary"
+          style={{ display: 'inline-block', cursor: 'pointer' }}
+        >
+          📂 Upload / Native Camera
+        </label>
+      </div>
     </div>
   );
 
   const renderAnalysis = () => (
     <div className="analysis-view">
       <div className="analysis-header">
-        <button 
+        <button
           className="btn-back"
           onClick={() => setCurrentView('camera')}
         >
@@ -336,7 +369,7 @@ function App() {
         </div>
 
         {!foodAnalysis && (
-          <button 
+          <button
             className="btn-primary"
             onClick={analyzeFood}
             disabled={analyzing}
@@ -373,7 +406,7 @@ function App() {
               </div>
             </div>
 
-            <button 
+            <button
               className="btn-primary"
               onClick={logFood}
             >
@@ -388,7 +421,7 @@ function App() {
   const renderLogs = () => (
     <div className="logs-view">
       <div className="logs-header">
-        <button 
+        <button
           className="btn-back"
           onClick={() => setCurrentView('home')}
         >
@@ -425,7 +458,7 @@ function App() {
         {foodLogs.length === 0 ? (
           <div className="no-logs">
             <p>No food logged today</p>
-            <button 
+            <button
               className="btn-primary"
               onClick={() => setCurrentView('camera')}
             >
@@ -447,7 +480,7 @@ function App() {
                   <span>F: {log.fat}g</span>
                 </div>
               </div>
-              <button 
+              <button
                 className="btn-delete"
                 onClick={() => deleteLog(log.log_id)}
               >

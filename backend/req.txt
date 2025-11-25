@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pymongo
+motor
+python-multipart
+requests
+python-jose[cryptography]
+passlib[bcrypt]
+pydantic
+pydantic-settings
+python-dotenv
+pillow
+aiofiles
