@@ -22,6 +22,10 @@ function App() {
   });
   const [calorieGoal, setCalorieGoal] = useState(2000);
 
+  // PWA States
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
   // Refs
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -29,12 +33,39 @@ function App() {
   // Load food logs on mount
   useEffect(() => {
     loadFoodLogs();
+
+    // PWA Install Prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+
+    // Online/Offline Status
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // Calculate calorie goal when profile changes
   useEffect(() => {
     calculateCalorieGoal();
   }, [userProfile]);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   // Camera Functions
   const startCamera = async () => {
@@ -87,6 +118,10 @@ function App() {
   // Food Analysis Functions
   const analyzeFood = async () => {
     if (!capturedImage) return;
+    if (!isOnline) {
+      alert("You are offline. Cannot analyze food.");
+      return;
+    }
 
     setAnalyzing(true);
     try {
@@ -167,6 +202,10 @@ function App() {
   };
 
   const deleteLog = async (logId) => {
+    if (!isOnline) {
+      alert("You are offline. Cannot delete logs.");
+      return;
+    }
     try {
       const response = await fetch(`${BACKEND_URL}/api/food-logs/${logId}`, {
         method: 'DELETE'
@@ -207,11 +246,22 @@ function App() {
   // Render Functions
   const renderHome = () => (
     <div className="home-view">
+      {!isOnline && (
+        <div className="offline-banner" style={{ backgroundColor: '#f59e0b', color: 'white', padding: '10px', textAlign: 'center', marginBottom: '10px' }}>
+          You are currently offline. Some features may be unavailable.
+        </div>
+      )}
       <div className="hero-section">
         <h1 className="hero-title">Food Calorie Tracker</h1>
         <p className="hero-subtitle">
           Snap a photo of your food and instantly get detailed nutritional information
         </p>
+
+        {deferredPrompt && (
+          <button className="btn-secondary" onClick={handleInstallClick} style={{ marginBottom: '20px' }}>
+            📲 Install App
+          </button>
+        )}
 
         <div className="daily-summary">
           <h3>Today's Progress</h3>

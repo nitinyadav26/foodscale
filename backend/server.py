@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, Form, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-# from motor.motor_asyncio import AsyncIOMotorClient  <-- Removed
 from pydantic import BaseModel
 from typing import Optional, List
 import os
@@ -11,6 +10,7 @@ import base64
 import google.generativeai as genai
 from dotenv import load_dotenv
 from google.api_core.exceptions import ResourceExhausted
+import sqlite3
 
 # Load environment variables
 load_dotenv()
@@ -18,10 +18,9 @@ load_dotenv()
 # ----------------------------
 # Environment variables
 # ----------------------------
-# MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017') <-- Removed
-# DB_NAME = os.environ.get('DB_NAME', 'test_database') <-- Removed
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '<YOUR_GEMINI_API_KEY>')
+DB_NAME = "foodscale.db"
 
 # Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
@@ -41,11 +40,34 @@ app.add_middleware(
 )
 
 # ----------------------------
-# In-Memory Storage (Temporary)
+# Database Setup
 # ----------------------------
-# client = AsyncIOMotorClient(MONGO_URL) <-- Removed
-# db = client[DB_NAME] <-- Removed
-food_logs_db = [] # List of dictionaries
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS food_logs (
+            log_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            food_name TEXT NOT NULL,
+            total_calories REAL,
+            protein REAL,
+            carbs REAL,
+            fat REAL,
+            weight_grams REAL,
+            image_base64 TEXT,
+            created_at TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 # ----------------------------
 # Pydantic Models
@@ -196,21 +218,16 @@ async def log_food(
 ):
     try:
         log_id = str(uuid.uuid4())
-        log_entry = {
-            "log_id": log_id,
-            "user_id": user_id,
-            "food_name": food_name,
-            "total_calories": total_calories,
-            "protein": protein,
-            "carbs": carbs,
-            "fat": fat,
-            "weight_grams": weight_grams,
-            "image_base64": image_base64,
-            "created_at": datetime.now()
-        }
+        created_at = datetime.now()
         
-        food_logs_db.append(log_entry)
-        # result = await db.food_logs.insert_one(log_entry)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO food_logs (log_id, user_id, food_name, total_calories, protein, carbs, fat, weight_grams, image_base64, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (log_id, user_id, food_name, total_calories, protein, carbs, fat, weight_grams, image_base64, created_at))
+        conn.commit()
+        conn.close()
         
         return {"log_id": log_id, "message": "Food logged successfully"}
         
@@ -221,20 +238,23 @@ async def log_food(
 @app.get("/api/food-logs/{user_id}")
 async def get_food_logs(user_id: str, date_filter: Optional[str] = None):
     try:
-        # query = {"user_id": user_id}
+        conn = get_db_connection()
+        cursor = conn.cursor()
         
-        filtered_logs = [log for log in food_logs_db if log["user_id"] == user_id]
+        query = "SELECT * FROM food_logs WHERE user_id = ?"
+        params = [user_id]
         
         if date_filter:
+            # SQLite stores datetime as string, so we need to filter by date string
             # Assuming date_filter is YYYY-MM-DD
-            start_date = datetime.strptime(date_filter, "%Y-%m-%d").date()
-            filtered_logs = [
-                log for log in filtered_logs 
-                if log["created_at"].date() == start_date
-            ]
+            query += " AND date(created_at) = date(?)"
+            params.append(date_filter)
             
-        # Sort by created_at desc
-        filtered_logs.sort(key=lambda x: x["created_at"], reverse=True)
+        query += " ORDER BY created_at DESC"
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
         
         logs = []
         daily_totals = {
@@ -244,23 +264,23 @@ async def get_food_logs(user_id: str, date_filter: Optional[str] = None):
             "fat": 0
         }
         
-        for doc in filtered_logs:
+        for row in rows:
             logs.append({
-                "log_id": doc["log_id"],
-                "food_name": doc["food_name"],
-                "total_calories": doc["total_calories"],
-                "protein": doc["protein"],
-                "carbs": doc["carbs"],
-                "fat": doc["fat"],
-                "weight_grams": doc["weight_grams"],
-                "image_base64": doc.get("image_base64"),
-                "created_at": doc["created_at"].isoformat()
+                "log_id": row["log_id"],
+                "food_name": row["food_name"],
+                "total_calories": row["total_calories"],
+                "protein": row["protein"],
+                "carbs": row["carbs"],
+                "fat": row["fat"],
+                "weight_grams": row["weight_grams"],
+                "image_base64": row["image_base64"],
+                "created_at": row["created_at"]
             })
             
-            daily_totals["calories"] += doc["total_calories"]
-            daily_totals["protein"] += doc["protein"]
-            daily_totals["carbs"] += doc["carbs"]
-            daily_totals["fat"] += doc["fat"]
+            daily_totals["calories"] += row["total_calories"]
+            daily_totals["protein"] += row["protein"]
+            daily_totals["carbs"] += row["carbs"]
+            daily_totals["fat"] += row["fat"]
             
         return {
             "logs": logs,
@@ -274,13 +294,14 @@ async def get_food_logs(user_id: str, date_filter: Optional[str] = None):
 @app.delete("/api/food-logs/{log_id}")
 async def delete_food_log(log_id: str):
     try:
-        # result = await db.food_logs.delete_one({"_id": ObjectId(log_id)})
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM food_logs WHERE log_id = ?", (log_id,))
+        rows_affected = cursor.rowcount
+        conn.commit()
+        conn.close()
         
-        global food_logs_db
-        initial_len = len(food_logs_db)
-        food_logs_db = [log for log in food_logs_db if log["log_id"] != log_id]
-        
-        if len(food_logs_db) == initial_len:
+        if rows_affected == 0:
             raise HTTPException(status_code=404, detail="Log not found")
             
         return {"message": "Log deleted successfully"}
